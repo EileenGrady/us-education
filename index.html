@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+	<meta charset=utf-8 />
+	<title>US Education</title>
+	<meta name='viewport' content='initial-scale=1,maximum-scale=1,user-scalable=no' />
+
+	<link rel="stylesheet" href="https://unpkg.com/leaflet@1.3.1/dist/leaflet.css" />
+	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/normalize/7.0.0/normalize.min.css" />
+	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/skeleton/2.0.4/skeleton.min.css" />
+	<!-- Custom styles for this template -->
+	<link href="https://fonts.googleapis.com/css?family=Oswald|Quattrocento" rel="stylesheet">
+
+	<style>
+		body {
+			background: #f5f5f5;
+			font-size: 2em;
+			font-family: 'Quattrocento', Serif;
+		}
+
+		h1 {
+			font-size: 2.5em;
+			font-family: 'Oswald', Sans-Serif;
+		}
+
+		h2 {
+			font-size: 1.6em;
+			font-weight: bold;
+		}
+
+		p {
+			font-size: 1em;
+		}
+
+		a {
+			color: '#67a9cf';
+		}
+
+		.container {
+			margin-top: 3rem;
+		}
+
+		#map {
+			border: 2px solid #d3d3d3;
+			height: 540px;
+			margin-bottom: 36px;
+		}
+
+		.leaflet-tooltip {
+			min-width: 140px;
+			font-size: 120%;
+			font-family: 'Quattrocento', Serif;
+			white-space: normal;
+		}
+
+		#legend {
+			padding: 6px 8px;
+			font-size: .7em;
+			font-family: 'Quattrocento', Serif;
+			background: rgba(255, 255, 255, 0.8);
+			box-shadow: 0 0 15px rgba(0, 0, 0, 0.2);
+			border-radius: 5px;
+			max-width: 200px;
+		}
+
+		#legend h5 {
+			font-size: 1.75rem;
+			font-family: 'Oswald', Sans-Serif;
+		}
+
+		#legend span {
+			width: 20px;
+			height: 20px;
+			float: left;
+			margin: 0 10px 4px 0;
+		}
+
+		#legend label {
+			font-size: 1.65em;
+		}
+
+		#legend label:after {
+			content: '';
+			display: block;
+			clear: both;
+		}
+
+		#ui-controls {
+			font-family: 'Quattrocento', Serif;
+			font-size: 1.2em;
+
+		}
+	</style>
+</head>
+
+<body>
+	<div class="container">
+		<div class="row">
+			<div class="twelve columns">
+				<h1>Educational Attainment in the Continental US, 2016</h1>
+			</div>
+		</div>
+		<div class="row">
+			<div id='map' class="twelve columns"></div>
+		</div>
+		<div class="row">
+			<h2>about this map</h2>
+		</div>
+		<section class="row">
+			<div class="six columns">
+				<p>This map shows educational attainment, or the highest level of education a person has completed, in the continental United States (2016 data). Choose an education level from the dropdown to see patterns of educational attainment by US county. Although
+					data for each level tends to aggregate in certain areas, America as a whole is more educated than ever before.
+				</p>
+			</div>
+			<div class="six columns u-pull-right">
+				<p> According to the <a href="https://www.census.gov/library/stories/2018/07/educational-attainment.html" target="_blank">US Census</a>, 90% of the US population age 25 and older has now completed at least a high school education.
+				</p>
+				<p> Map authored by <a href="https://eileengrady.github.io/" target="_blank">Eileen Grady</a> on October 23, 2018. Educational attainment data acquired from <a target="_blank" href="https://factfinder.census.gov/faces/nav/jsf/pages/index.xhtml">American Fact Finder</a>,
+					and joined to US counties in QGIS 2.18.17.
+				</p>
+			</div>
+		</section>
+	</div>
+
+	<!-- legend div is selected by the JS and dynamically added to the map -->
+	<div id="legend"></div>
+
+	<!-- ui-controls div is selected by the JS and dynamically added to the map -->
+	<div id='ui-controls'>
+		<label>Choose a level of education:</label>
+		<select id="occupied">
+      <option value="edu_lessThan9Grade" selected>Less than 9th Grade</option>
+      <option value="edu_nine_twelve_doDegree">High School, but no diploma</option>
+      <option value="edu_highSchool">High School Diploma, or equivalent</option>
+      <option value="edu_someCollege_noDegree">Some College, no degree</option>
+      <option value="edu_associate">Associate Degree</option>
+      <option value="edu_bachelor">Bachelor Degree</option>
+      <option value="edu_graduateOrProfessional">Graduate or Professional Degree</option>
+    </select>
+	</div>
+	<!-- end ui-controls -->
+
+	<script src="http://code.jquery.com/jquery-3.2.1.min.js"></script>
+	<script src="https://unpkg.com/leaflet@1.3.1/dist/leaflet.js"></script>
+	<script src="https://unpkg.com/simple-statistics@5.2.1/dist/simple-statistics.min.js"></script>
+
+	<script>
+		// initial map options, allow pan and zoom, disable zoom control, restrict zoom out
+		var options = {
+			scrollWheelZoom: true,
+			zoomSnap: .1,
+			dragging: true,
+			zoomControl: false,
+			minZoom: 4
+		}
+
+		// create Leaflet map and apply options
+		var map = L.map('map', options);
+
+		// set global variables for map layer,
+		// mapped initial attribute, and normalizing attribute when page first loads
+		var attributeValue = "edu_lessThan9Grade",
+			normValue = "edu_totalPopOver25"; //normalize by the total population per county over 25
+
+		// create object to hold legend titles that coordinate with attribute values
+		var labels = {
+			"edu_lessThan9Grade": "Population over 25 with less than a ninth grade education",
+			"edu_nine_twelve_doDegree": "Population over 25 with some high school education, no diploma",
+			"edu_highSchool": "Population over 25 with a high school diploma or equivalent",
+			"edu_someCollege_noDegree": "Population over 25 with some college education, no degree",
+			"edu_associate": "Population over 25 with an associate degree",
+			"edu_bachelor": "Population over 25 with a bachelor degree",
+			"edu_graduateOrProfessional": "Population over 25 with a graduate or professional degree"
+		}
+
+		// AJAX call to load US county data
+		$.getJSON("data/educational_attainment.geojson", function(data) {
+
+			drawMap(data); // draw the map using GeoJSON data
+
+		});
+
+		function drawMap(data, breaks) { //add breaks as an argument so the legend can be added within this function
+
+			// create Leaflet data layer and add to map
+			var dataLayer = L.geoJson(data, {
+				style: function(feature) {
+					// style counties with initial default path options
+					return {
+						color: '#dddddd',
+						weight: 1,
+						fillOpacity: 1,
+						fillColor: '#1f78b4'
+					};
+				},
+				onEachFeature: function(feature, layer) {
+
+					// when mousing over a layer
+					layer.on('mouseover', function() {
+
+						// change the stroke color and width, bring that element to the front
+						layer.setStyle({
+							color: '#ff944d',
+							weight: 1.5
+						}).bringToFront();
+					});
+
+					// on mousing off layer
+					layer.on('mouseout', function() {
+
+						// reset the layer style to its original stroke color and width
+						layer.setStyle({
+							color: '#dddddd',
+							weight: 1
+						});
+					});
+				}
+			}).addTo(map);
+
+			// fit the map's bounds and zoom level using the dataLayer extent
+			map.fitBounds(dataLayer.getBounds(), {});
+
+			updateMap(dataLayer);
+			addUi(dataLayer); //add the UI when drawing the map
+			addLegend(breaks); //add legend here so that it is only added once
+		}
+
+		//updateMap reclassifies and symbolizes data when a user chooses a new data attribute from the select form
+		function updateMap(dataLayer) {
+			// get the class breaks for the current data attribute
+			var breaks = getClassBreaks(dataLayer);
+
+			// loop through each county layer to update the color and tooltip info
+			dataLayer.eachLayer(function(layer) {
+
+				var props = layer.feature.properties;
+
+				// set the fill color of layer based on its normalized data value
+				layer.setStyle({
+					fillColor: getColor(props[attributeValue] /
+						props[normValue], breaks)
+				});
+
+				// create tooltip content--county name and normalized dat value
+				var tooltipInfo = "<b>" + props["edu_Geography"] +
+					"</b></br>" +
+					((props[attributeValue] / props[normValue]) * 100).toLocaleString() +
+					"%";
+
+				// bind a tooltip to layer with county-specific information
+				layer.bindTooltip(tooltipInfo, {
+					// sticky property so tooltip follows the mouse
+					sticky: true,
+					tooltipAnchor: [200, 200]
+				});
+
+			});
+
+			//zoom back out to full map extent when user changes select form to show a new data attribute
+			map.fitBounds(dataLayer.getBounds(), {});
+
+			updateLegend(breaks); //call updateLegend within the updateMap function so that it updates along with the map whenever the select form is changed
+		}
+
+		function getClassBreaks(dataLayer) {
+
+			// create empty Array for storing values
+			var values = [];
+
+			// loop through all the counties
+			dataLayer.eachLayer(function(layer) {
+				var value = layer.feature.properties[attributeValue] / layer.feature.properties[normValue];
+				values.push(value); // push the normalized value for each layer into the Array
+			});
+
+			// determine similar clusters
+			var clusters = ss.ckmeans(values, 5);
+
+			// create an array of the lowest value within each cluster
+			var breaks = clusters.map(function(cluster) {
+				return [cluster[0], cluster.pop()];
+			});
+
+			//return array of arrays representing each class break
+			return breaks;
+
+		}
+
+		function getColor(d, breaks) {
+			// function accepts a single normalized data attribute value
+			// and uses a series of conditional statements to determine which
+			// which color value to return to return to the function caller
+
+			if (d <= breaks[0][1]) {
+				return '#f6eff7';
+			} else if (d <= breaks[1][1]) {
+				return '#bdc9e1';
+			} else if (d <= breaks[2][1]) {
+				return '#67a9cf';
+			} else if (d <= breaks[3][1]) {
+				return '#1c9099'
+			} else if (d <= breaks[4][1]) {
+				return '#016c59'
+			}
+
+		}
+
+		function addLegend(breaks) {
+
+			// create a new Leaflet control object, and position it top left
+			var legendControl = L.control({
+				position: 'bottomright'
+			});
+
+			// when the legend is added to the map
+			legendControl.onAdd = function(map) {
+
+				// select a div element with an id attribute of legend
+				var legend = L.DomUtil.get('legend');
+
+				// disable scroll and click/touch on map when on legend
+				L.DomEvent.disableScrollPropagation(legend);
+				L.DomEvent.disableClickPropagation(legend);
+
+				// return the selection to the method
+				return legend;
+
+			};
+
+			// add the empty legend div to the map
+			legendControl.addTo(map);
+
+		}
+
+		function updateLegend(breaks) {
+			// select the legend, add a title, begin an unordered list and assign to a variable
+			var legend = $('#legend').html("<h5>" + labels[attributeValue] + "</h5>");
+
+			// loop through the Array of classification break values
+			for (var i = 0; i <= breaks.length - 1; i++) {
+
+				var color = getColor(breaks[i][0], breaks);
+
+				legend.append(
+					'<span style="background:' + color + '"></span> ' +
+					'<label>' + (breaks[i][0] * 100).toLocaleString() + ' &mdash; ' +
+					(breaks[i][1] * 100).toLocaleString() + ' %</label>');
+			}
+		}
+
+		function addUi(dataLayer) {
+			// create the slider control
+			var selectControl = L.control({
+				position: 'topright'
+			});
+			// when control is added
+			selectControl.onAdd = function(map) {
+				// get the element with id attribute of ui-controls
+				return L.DomUtil.get("ui-controls");
+			}
+			// add the control to the map
+			selectControl.addTo(map);
+
+			$('select[id="occupied"]').change(function() { //listens for a change in the select form
+
+				// code executed here when change event occurs
+
+				attributeValue = $(this).val(); //assigns whichever option is selected from the form to attributeValue variable
+
+				updateMap(dataLayer); //updates map with the new attrubuteValue
+
+			});
+		}
+	</script>
+
+</body>
+
+</html>
