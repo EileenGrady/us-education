@@ -141,7 +141,7 @@
 	</div>
 	<!-- end ui-controls -->
 
-	<script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
+	<script src="http://code.jquery.com/jquery-3.2.1.min.js"></script>
 	<script src="https://unpkg.com/leaflet@1.3.1/dist/leaflet.js"></script>
 	<script src="https://unpkg.com/simple-statistics@5.2.1/dist/simple-statistics.min.js"></script>
 
@@ -175,7 +175,7 @@
 		}
 
 		// AJAX call to load US county data
-		$.getJSON("data/educational_attainment.geojson", function(data) {
+		$.getJSON("data/education_10.json", function(data) {
 
 			drawMap(data); // draw the map using GeoJSON data
 
